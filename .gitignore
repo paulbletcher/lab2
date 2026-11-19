@@ -2,3 +2,11 @@
 !/.env.example
 /data/
 /out/
+
+# Local credentials and generated pipeline data
+.env
+.env.*
+!.env.example
+/outputs/
+/cache/
+/id_list.csv
