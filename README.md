@@ -49,8 +49,36 @@ continuing:
    later runs; failed requests are retried. HTTP 401, 403, or 429 stops the batch.
    Other request failures are recorded in the audit, so inspect it even when the
    script exits successfully.
-3. **Analyze:** reads the validated IDs and cached responses, flattens movie and
-   credit data, and writes nine CSV tables under `data/analysis/`.
+3. **Analyze:** `python run_analysis.py` reads the validated IDs and cached
+   responses, transforms them, computes the analysis, checks integrity, and
+   calls the loader to write nine CSV tables under `data/analysis/`.
+
+To run the full workflow with the current Python environment:
+
+```powershell
+python run_pipeline.py
+```
+
+The runner uses the existing validation and extraction scripts, reuses successful
+SQLite responses, and retries failed requests. Input ID validation is a prerequisite
+for acquisition in this project. The lecture's extract → validate → transform →
+check → load responsibilities live in these modules:
+
+| Stage | Location and responsibility |
+| --- | --- |
+| Extract | `pipeline/extract.py`: TMDb acquisition, response ID validation, SQLite cache, and fetch audit |
+| Validate | `pipeline/validate.py`: normalize and validate input IDs, remove duplicates, reconcile input counts, and write input audits |
+| Transform | `pipeline/transform.py`: flatten details, lead actors, and directors; calculate usable ratios |
+| Analysis | `pipeline/analysis.py`: comparisons, summaries, and rankings |
+| Check | `pipeline/checks.py`: unique movie IDs, detail row counts, one-to-one actor and many-to-one director joins, unique movie-director pairs, audit/cache coverage, and comparison count reconciliation |
+| Load | `pipeline/load.py`: write final analysis CSVs after checks pass |
+
+`run_analysis.py` orchestrates transformation, analysis, checks, and loading without
+making API requests. It requires the fetch audit alongside the cache. Acquisition
+failures remain in `data/cache/fetch_audit.csv` and are printed during analysis;
+they are not integrity failures when the audit agrees with cache coverage. In
+particular, the five known IDs returning HTTP 404 do not block a valid run.
+An integrity failure stops analysis before the loader writes any results.
 
 ## Improvement beyond the brief
 

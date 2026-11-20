@@ -6,6 +6,10 @@ from pathlib import Path
 import pandas as pd
 
 from pipeline.analysis import analyze_licensing, summarize_talent
+from pipeline.checks import (
+    check_acquisition, check_movies, check_results, join_movie_ratios,
+)
+from pipeline.load import load_analysis
 from pipeline.transform import (
     flatten_directors,
     flatten_lead_actors,
@@ -45,8 +49,7 @@ def main():
         raise SystemExit("The cache has no movie details for the validated IDs.")
 
     movies = flatten_movie_details(pd.DataFrame(detail_records))
-    if not movies["tmdb_id"].is_unique:
-        raise ValueError("Expected one row per movie after flattening details.")
+    check_movies(validated, detail_records, movies)
 
     movie_ids = set(movies["tmdb_id"])
     credits_by_movie = {
@@ -56,11 +59,11 @@ def main():
     }
 
     movie_ratios = movies[["tmdb_id", "revenue_to_budget"]]
-    actor_films = flatten_lead_actors(credits_by_movie).merge(
-        movie_ratios, on="tmdb_id", how="inner", validate="one_to_one"
+    actor_films = join_movie_ratios(
+        flatten_lead_actors(credits_by_movie), movie_ratios, "one_to_one"
     )
-    director_films = flatten_directors(credits_by_movie).merge(
-        movie_ratios, on="tmdb_id", how="inner", validate="many_to_one"
+    director_films = join_movie_ratios(
+        flatten_directors(credits_by_movie), movie_ratios, "many_to_one"
     )
 
     outputs = analyze_licensing(movies)
@@ -76,10 +79,12 @@ def main():
             ]
 
     output_dir = root / "data" / "analysis"
-    output_dir.mkdir(parents=True, exist_ok=True)
-
-    for name, table in outputs.items():
-        table.to_csv(output_dir / f"{name}.csv", index=False)
+    audit = pd.read_csv(cache_path.parent / "fetch_audit.csv", dtype={"tmdb_id": str})
+    failures = check_acquisition(validated, rows, audit)
+    for failure in failures:
+        print(f"Acquisition audit: {failure}")
+    check_results(movies, actor_films, director_films, outputs)
+    load_analysis(outputs, output_dir)
 
     print(f"Analyzed {len(movies)} of {len(valid_ids)} validated movie IDs.")
     print(outputs["comparison"].round(2).to_string(index=False))
