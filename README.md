@@ -52,6 +52,48 @@ continuing:
 3. **Analyze:** reads the validated IDs and cached responses, flattens movie and
    credit data, and writes nine CSV tables under `data/analysis/`.
 
+## Improvement beyond the brief
+
+The quarterly shortlist change report saves Adjoa from comparing four CSVs by
+hand each quarter. It shows which films and franchises entered, dropped out,
+moved in the rankings, or had a change in their revenue-to-budget ratio (reported
+to two decimal places). It compares the same release window across runs:
+all years against all years, and releases from 2000 onward against the same
+window. Kwame can use the report to revisit his negotiation priorities. Adjoa
+can check the acquisition audit (`data/cache/fetch_audit.csv`) or candidate list
+(`data/input/id_list.csv`) to investigate why a title moved; the report itself
+does not establish the cause.
+
+Run these commands from the repository root using the project's Python
+environment. If the virtual environment is not activated, replace `python` with
+`.\.venv\Scripts\python.exe`. After the current analysis, save the baseline
+before a later run overwrites the analysis CSVs:
+
+```powershell
+python shortlist_changes.py snapshot data/snapshots/baseline
+```
+
+After running the full pipeline for a later quarter, save its analysis results:
+
+```powershell
+python shortlist_changes.py snapshot data/snapshots/next_run
+```
+
+Then compare the two snapshots and write the Markdown report:
+
+```powershell
+python shortlist_changes.py compare data/snapshots/baseline data/snapshots/next_run --output shortlist_changes.md
+```
+
+`snapshot` reads the four ranked franchise and standalone CSVs from
+`data/analysis/` by default; `--source` selects another analysis folder. It copies
+them into a new snapshot folder. `compare` requires `--output`. Both commands
+refuse to overwrite an existing destination, so use new quarter-specific folder
+and report names for subsequent comparisons. If `shortlist_changes.md` already
+exists, choose a new output filename to preserve it. Snapshots under `data/` are
+excluded from Git. These commands use only Python's standard library and leave
+the analysis CSVs and SQLite cache unchanged.
+
 ## Analysis outputs
 
 | CSV | Contents |
