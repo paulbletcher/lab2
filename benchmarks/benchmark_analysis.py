@@ -1,3 +1,5 @@
+"""Time three cached analysis runs, including startup, checks, and CSV writes."""
+
 import subprocess
 import sys
 from pathlib import Path

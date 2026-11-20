@@ -15,3 +15,6 @@
 __pycache__/
 *.py[cod]
 .ipynb_checkpoints/
+
+# Local Python environment
+/.venv/

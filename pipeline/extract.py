@@ -1,16 +1,22 @@
 import json
 import os
 import sqlite3
+import sys
 from contextlib import closing
 from datetime import datetime, timezone
 from email.utils import parsedate_to_datetime
 from pathlib import Path
-from tempfile import NamedTemporaryFile
 from time import sleep
 
 import pandas as pd
 import requests
 from dotenv import load_dotenv
+
+# Keep direct `python pipeline/extract.py` execution available.
+if __package__ in (None, ""):
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+
+from pipeline.csv_io import write_csv_atomic
 
 
 def retry_delay(retry_after, fallback):
@@ -98,18 +104,7 @@ def get_response(connection, movie_id, endpoint, url, session, api_key):
 def write_audit(results, audit_path):
     """Replace the audit atomically, preserving the existing CSV layout."""
     audit = pd.DataFrame(results, columns=["tmdb_id", "details", "credits"])
-    temporary_path = None
-    try:
-        with NamedTemporaryFile(
-            mode="w", encoding="utf-8", newline="", dir=audit_path.parent,
-            prefix=".fetch-audit-", suffix=".tmp", delete=False,
-        ) as temporary_file:
-            temporary_path = Path(temporary_file.name)
-            audit.to_csv(temporary_file, index=False)
-        temporary_path.replace(audit_path)
-    finally:
-        if temporary_path is not None:
-            temporary_path.unlink(missing_ok=True)
+    write_csv_atomic(audit, audit_path)
     return audit
 
 

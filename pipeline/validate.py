@@ -1,49 +1,28 @@
+"""Validate and normalize candidate TMDb IDs, preserving a row-level audit."""
+
 from pathlib import Path
 
 import pandas as pd
 
 
-def main():
-    project_root = Path(__file__).resolve().parents[1]
-    candidates = pd.read_csv(
-        project_root / "data/input/id_list.csv",
-        dtype=str,
-        keep_default_na=False,
-        skip_blank_lines=False,
-    )
-
-    # Inspect input IDs.
-    print("Columns:", candidates.columns.tolist())
-    print("Input rows:", len(candidates))
-
-    raw_ids = candidates["tmdb_id"]
-    clean_ids = raw_ids.str.strip()
-
+def validate_ids(candidates):
+    """Return (unique normalized IDs, input audit) without reading or writing files."""
+    if "tmdb_id" not in candidates.columns:
+        raise ValueError(
+            "Expected input column 'tmdb_id'; actual columns: "
+            + repr(candidates.columns.tolist())
+        )
+    clean_ids = candidates["tmdb_id"].fillna("").astype(str).str.strip()
     is_blank = clean_ids.eq("")
+    # Zero is not a positive TMDb ID: reject 0/00/etc., but normalize 00155 to 155.
     is_positive_integer = clean_ids.str.fullmatch(r"[0-9]+") & ~clean_ids.str.fullmatch(r"0+")
     is_invalid = ~is_blank & ~is_positive_integer
-
-    print("Blank IDs:", is_blank.sum())
-    print("Invalid IDs:", raw_ids[is_invalid].tolist())
-
-    # Check for duplicates.
     valid_ids = clean_ids[is_positive_integer].str.lstrip("0")
-    is_duplicate = valid_ids.duplicated(keep="first")
+    duplicate_ids = valid_ids[valid_ids.duplicated(keep="first")]
+    validated_ids = pd.DataFrame({"tmdb_id": valid_ids[~valid_ids.duplicated(keep="first")].tolist()})
 
-    duplicate_ids = valid_ids[is_duplicate]
-    ids_to_fetch = valid_ids[~is_duplicate].tolist()
-
-    print("Repeated IDs:", duplicate_ids.tolist())
-    print("Duplicate rows:", len(duplicate_ids))
-    print("Unique IDs ready to fetch:", len(ids_to_fetch))
-
-    # Confirm that every input row is accounted for.
-    assert len(candidates) == (
-        is_blank.sum() + is_invalid.sum() + len(duplicate_ids) + len(ids_to_fetch)
-    ), "The validation counts do not add up to the input row count."
-
-    output_dir = project_root / "data/validated"
-    output_dir.mkdir(parents=True, exist_ok=True)
+    if len(candidates) != is_blank.sum() + is_invalid.sum() + len(duplicate_ids) + len(validated_ids):
+        raise ValueError("The validation counts do not add up to the input row count.")
 
     audit = candidates.copy()
     audit.insert(0, "source_line", range(2, len(audit) + 2))
@@ -51,14 +30,31 @@ def main():
     audit.loc[is_blank, "status"] = "missing"
     audit.loc[is_invalid, "status"] = "invalid_format"
     audit.loc[duplicate_ids.index, "status"] = "duplicate"
+    return validated_ids, audit
 
-    audit.to_csv(output_dir / "id_audit.csv", index=False)
-    pd.DataFrame({"tmdb_id": ids_to_fetch}).to_csv(
-        output_dir / "validated_ids.csv", index=False
+
+def main():
+    project_root = Path(__file__).resolve().parents[1]
+    candidates = pd.read_csv(
+        project_root / "data/input/id_list.csv", dtype=str,
+        keep_default_na=False, skip_blank_lines=False,
     )
+    validated_ids, audit = validate_ids(candidates)
+    print("Columns:", candidates.columns.tolist())
+    print("Input rows:", len(candidates))
+    print("Blank IDs:", int(audit["status"].eq("missing").sum()))
+    print("Invalid IDs:", audit.loc[audit["status"].eq("invalid_format"), "tmdb_id"].tolist())
+    repeated = audit.loc[audit["status"].eq("duplicate"), "tmdb_id"].str.strip().str.lstrip("0")
+    print("Repeated IDs:", repeated.tolist())
+    print("Duplicate rows:", len(repeated))
+    print("Unique IDs ready to fetch:", len(validated_ids))
 
+    output_dir = project_root / "data/validated"
+    output_dir.mkdir(parents=True, exist_ok=True)
+    audit.to_csv(output_dir / "id_audit.csv", index=False)
+    validated_ids.to_csv(output_dir / "validated_ids.csv", index=False)
     print(audit["status"].value_counts())
-    print(f"Saved {len(ids_to_fetch)} unique IDs to {output_dir / 'validated_ids.csv'}")
+    print(f"Saved {len(validated_ids)} unique IDs to {output_dir / 'validated_ids.csv'}")
 
 
 if __name__ == "__main__":

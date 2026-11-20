@@ -15,10 +15,16 @@ and cache are never written by this suite. No additional test package is needed.
   404/401/403 handling, exhausted 429, sanitized errors, atomic audit writes,
   complete audit coverage after a fatal stop, and cache reuse on resumption.
 - `test_workflow.py` checks import safety, ID normalization from a different
-  working directory, disabled notebook live requests, and the public shortlist
-  `snapshot` and `compare` commands.
+  working directory, runner stage order, timeouts, failure reporting and secret redaction, disabled
+  notebook live requests, and the public shortlist `snapshot` and `compare`
+  commands.
 - `test_transforms.py` checks film/index alignment, absent collections, empty
   credits, tied billing order, and repeated/co-director credits.
+
+- `test_hygiene.py` checks missing-column errors and ID validation, numeric billing
+  representations and exclusions, collection schema and financial coercion counts,
+  atomic write/replace failures, and identical 500-film data plus nine output CSVs
+  after reversing source audit and cache insertion order.
 
 ## Synthetic shortlist fixtures
 

@@ -63,6 +63,7 @@ def analyze_licensing(movies):
 
 
 def summarize_talent(films, person_id, person_name):
+    """Use the same ranking rules for actors and directors via their ID/name columns."""
     return (
         films.groupby(person_id, as_index=False)
         .agg(

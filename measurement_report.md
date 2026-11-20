@@ -14,7 +14,7 @@ not a guaranteed meeting-time service level.
 - **What was timed:** Each helper starts `perf_counter()` immediately before launching `run_analysis.py` and stops when that child process exits. Includes Python startup, cache reads, transformation, analysis, integrity checks, and writing nine CSVs. Excludes live API acquisition, snapshot preparation, and synthetic dataset setup.
 - **Runs, warm or cold:** Three sequential fresh Python processes per dataset, each reading an existing SQLite cache. No explicit warm-up or disk-cache flush; operating-system cache state and other laptop activity were not controlled. These are cached-data runs, not cold-start guarantees.
 - **Isolation:** Scripts and existing cache/audits/validated IDs were copied into a temporary verification project. Its generated CSVs stayed there. All nine current-cache outputs matched the real analysis outputs byte-for-byte.
-- **Synthetic input:** Repeats complete details-and-credits records whose fetch audit marks both responses successful. Each copy receives a unique test ID; exactly 500 IDs are analyzed. It tests row volume rather than 500 independently acquired films or live fetching.
+- **Synthetic input:** Successful source IDs are deduplicated and sorted numerically; JSON keys are sorted. There is no randomness. Reordering identical source rows does not change the dataset. Repeats complete details-and-credits records whose fetch audit marks both responses successful. Each copy receives a unique test ID; exactly 500 IDs are analyzed. It tests row volume rather than 500 independently acquired films or live fetching.
 - **Reported figures:** Median, maximum, and an interpolated empirical p95 from the three timings printed by each helper. For three sorted times, p95 is the second time plus 90% of the distance to the maximum. Three observations give a weak estimate of tail latency; it is descriptive, not a reliable production p95.
 
 Run from the repository root using the project virtual environment:
@@ -32,19 +32,19 @@ copy with the same local data if existing outputs must remain untouched. The
 
 | Scenario | Runs | Median | p95 | Worst | Target met? |
 |---|---:|---:|---:|---:|---|
-| Current cache: 112 of 117 validated IDs | 3 | 2.403 s | 2.635 s | 2.661 s | Baseline reproduced; nine CSVs each run |
-| Synthetic cache: 500 of 500 IDs | 3 | 3.220 s | 3.633 s | 3.679 s | Yes: 500 records and nine CSVs each run |
+| Current cache: 112 of 117 validated IDs | 3 | 2.381 s | 2.540 s | 2.558 s | Baseline reproduced; nine CSVs each run |
+| Synthetic cache: 500 of 500 IDs | 3 | 3.598 s | 3.641 s | 3.646 s | Yes: 500 records and nine CSVs each run |
 
 | Dataset | Run 1 | Run 2 | Run 3 |
 |---|---:|---:|---:|
-| Current cache | 2.661 s | 2.403 s | 2.232 s |
-| Synthetic 500 | 3.220 s | 3.075 s | 3.679 s |
+| Current cache | 2.381 s | 2.558 s | 2.124 s |
+| Synthetic 500 | 3.598 s | 3.646 s | 3.154 s |
 
 ## Before / after
 
 | Query / stage | Before | After | Change |
 |---|---|---|---|
-| Cached analysis | No controlled pre-change measurement for a performance optimization | Capacity verification above | No speed-up claimed; this submission work changes documentation and packaging, not analysis logic |
+| Cached analysis | No controlled pre-change measurement for a performance optimization | Capacity verification above | No speed-up claimed; this verification covers hygiene changes; current-cache analytical outputs remain byte-identical |
 
 Earlier README timings came from a different run. They are replaced by this
 verification batch; differences cannot be attributed to an optimization because
@@ -57,3 +57,5 @@ missing-value diversity do not increase with record count. Live fetching depends
 on network and server behavior and is excluded. The five unavailable real IDs
 remain audit failures; analysis still uses 112 acquired films. This three-run
 sample on one laptop is not a broad benchmark or a guarantee of future runtime.
+
+The measurements above were executed on 20 November 2026 UTC. The memo date is its review date.

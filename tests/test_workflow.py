@@ -16,12 +16,40 @@ import pandas as pd
 import requests
 
 from pipeline import validate
+import run_pipeline
 
 
 ROOT = Path(__file__).resolve().parents[1]
 
 
 class WorkflowTests(unittest.TestCase):
+    def test_runner_calls_imported_stages_in_prerequisite_order(self):
+        result = subprocess.CompletedProcess([], 0, "ok\n", "")
+        with patch("run_pipeline.subprocess.run", return_value=result) as run, redirect_stdout(io.StringIO()) as output:
+            run_pipeline.main()
+        self.assertEqual([call.args[0][-1] for call in run.call_args_list],
+                         [f"from {stage.__name__} import main; main()" for stage, _ in run_pipeline.STAGES])
+        self.assertEqual([call.kwargs["timeout"] for call in run.call_args_list], [60, 3600, 120])
+        self.assertIn("Completed run_analysis", output.getvalue())
+
+    def test_runner_stops_and_redacts_failed_stage_output(self):
+        failure = subprocess.CalledProcessError(1, [], output="api_key=secret\n", stderr="failed secret\n")
+        with patch.dict(os.environ, {"TMDB_API_KEY": "secret"}), \
+                patch("run_pipeline.subprocess.run", side_effect=failure) as run, redirect_stdout(io.StringIO()) as output:
+            with self.assertRaisesRegex(SystemExit, "pipeline.validate failed"):
+                run_pipeline.main()
+        self.assertEqual(run.call_count, 1)
+        self.assertNotIn("secret", output.getvalue())
+        self.assertIn("[REDACTED]", output.getvalue())
+
+    def test_runner_stops_and_names_timed_out_stage(self):
+        result = subprocess.CompletedProcess([], 0, "", "")
+        failure = subprocess.TimeoutExpired([], 3600, output=b"waiting\n")
+        with patch("run_pipeline.subprocess.run", side_effect=[result, failure]) as run, redirect_stdout(io.StringIO()):
+            with self.assertRaisesRegex(SystemExit, "pipeline.extract timed out after 3600s"):
+                run_pipeline.main()
+        self.assertEqual(run.call_count, 2)
+
     def test_importing_validation_and_acquisition_does_no_io(self):
         for filename in ("validate.py", "extract.py"):
             with self.subTest(filename=filename), patch("pandas.read_csv") as read, \
@@ -54,7 +82,7 @@ class WorkflowTests(unittest.TestCase):
             self.assertFalse((unrelated / "data").exists())
 
     def test_notebook_live_checks_are_disabled_without_credentials(self):
-        notebook = json.loads((ROOT / "data profile/tmdb_data_profile.ipynb").read_text(encoding="utf-8"))
+        notebook = json.loads((ROOT / "data_profile/tmdb_data_profile.ipynb").read_text(encoding="utf-8"))
         sources = ["".join(c["source"]) for c in notebook["cells"] if c["cell_type"] == "code"]
         live_sources = [source for source in sources if "requests.get(" in source]
         self.assertEqual(len(live_sources), 2)

@@ -2,7 +2,12 @@ import pandas as pd
 
 
 def flatten_movie_details(movies: pd.DataFrame) -> pd.DataFrame:
-    """Turn cached movie details into a table with one row per movie."""
+    """Preserve movie rows; use Int64 IDs, nullable string collection names.
+
+    Missing IDs mean standalone; their names are also missing. Blank collection
+    names become missing without changing a present collection ID. Financial
+    coercion counts are available in result.attrs["financial_coercion"].
+    """
     flat = movies[
         ["tmdb_id", "title", "release_date", "budget", "revenue",
          "vote_average", "vote_count"]
@@ -14,13 +19,25 @@ def flatten_movie_details(movies: pd.DataFrame) -> pd.DataFrame:
     ]).reindex(columns=["id", "name"])
     collections.index = movies.index
     flat["collection_id"] = collections["id"].astype("Int64")
-    flat["collection_name"] = collections["name"]
+    flat["collection_name"] = (
+        collections["name"].astype("string").str.strip().replace("", pd.NA)
+        .where(flat["collection_id"].notna())
+    )
 
     flat["release_date"] = pd.to_datetime(
         flat["release_date"], format="%Y-%m-%d", errors="coerce"
     )
-    flat["budget"] = pd.to_numeric(flat["budget"], errors="coerce")
-    flat["revenue"] = pd.to_numeric(flat["revenue"], errors="coerce")
+    financial_coercion = {}
+    for field in ("budget", "revenue"):
+        original = flat[field]
+        converted = pd.to_numeric(original, errors="coerce")
+        financial_coercion[field] = {
+            "originally_missing": int(original.isna().sum()),
+            "invalid_non_null": int((original.notna() & converted.isna()).sum()),
+            "missing_after_coercion": int(converted.isna().sum()),
+        }
+        flat[field] = converted
+    flat.attrs["financial_coercion"] = financial_coercion
 
     positive_amounts = flat["budget"].gt(0) & flat["revenue"].gt(0)
     flat["revenue_to_budget"] = (
@@ -32,20 +49,29 @@ def flatten_movie_details(movies: pd.DataFrame) -> pd.DataFrame:
 
 
 def flatten_lead_actors(credits_by_movie: dict) -> pd.DataFrame:
-    """Return the first-billed actor for each movie with usable cast data."""
+    """Select the first minimum nonnegative integer billing position per movie.
+
+    Accept equivalent integers, integral floats, and numeric strings. Exclude
+    missing, boolean, nonnumeric, nonfinite, negative, and fractional positions.
+    """
     columns = ["tmdb_id", "lead_actor_id", "lead_actor_name"]
     movies = pd.DataFrame.from_dict(credits_by_movie, orient="index")
     cast = movies.reindex(columns=["cast"])["cast"].explode()
-    # Check original values before normalization can coerce orders to floats.
-    cast = cast[cast.map(
-        lambda actor: isinstance(actor, dict)
-        and isinstance(actor.get("order"), int)
-    )]
+    cast = cast[cast.map(lambda actor: isinstance(actor, dict))]
     if cast.empty:
         return pd.DataFrame(columns=columns)
 
     actors = pd.json_normalize(cast.tolist())
     actors["tmdb_id"] = cast.index.to_numpy()
+    original_order = actors.reindex(columns=["order"])["order"]
+    orders = pd.to_numeric(original_order, errors="coerce")
+    finite = orders.notna() & orders.ge(0) & orders.lt(float("inf"))
+    orders = orders.where(finite)
+    valid = orders.mod(1).eq(0) & ~original_order.map(lambda value: isinstance(value, bool))
+    actors["order"] = orders
+    actors = actors.loc[valid]
+    if actors.empty:
+        return pd.DataFrame(columns=columns)
     leads = actors.loc[actors.groupby("tmdb_id", sort=False)["order"].idxmin()]
     return leads.rename(columns={
         "id": "lead_actor_id", "name": "lead_actor_name",

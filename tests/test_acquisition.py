@@ -172,7 +172,7 @@ class AcquisitionTests(unittest.TestCase):
             with self.assertRaises(OSError):
                 extract.write_audit([{"tmdb_id": "2", "details": "not attempted", "credits": "not attempted"}], path)
         self.assertEqual(path.read_text(), original)
-        self.assertEqual(list(self.root.glob(".fetch-audit-*.tmp")), [])
+        self.assertEqual(list(self.root.glob(".fetch_audit.csv-*.tmp")), [])
 
 
 if __name__ == "__main__":

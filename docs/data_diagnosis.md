@@ -125,3 +125,30 @@ re-releases. The local cache does not establish which films' grosses include
 re-release revenue or how much, so no film-specific re-release claim is made.
 These are reported box-office revenues relative to production budgets, not net
 profit or expected streaming returns.
+
+## Transform schema and coercion diagnosis
+
+The details transform preserves movie row order and index. `collection_id` is
+nullable `Int64`; `collection_name` is nullable pandas `string`. Missing IDs
+mean standalone and force a missing name. Whitespace-only names become missing;
+a missing name alone does not remove a present collection ID or change the group.
+The current 112 cached records contain 96 collection objects and 16 null
+collections, with no blank or missing names among the collection objects.
+
+`flat_movies.attrs["financial_coercion"]` distinguishes original nulls from
+non-null values that become missing during numeric conversion. The analysis
+command logs both counts separately. For budget and revenue, the current cache
+has **0 originally missing and 0 invalid non-null values**. No movie rows are
+dropped by conversion; ratios still require positive budget and revenue.
+
+Lead actor selection accepts nonnegative integer billing positions represented
+as integers, integral floats, or numeric strings. Missing, boolean, nonnumeric,
+nonfinite, negative, and fractional positions are excluded. Ties keep the first
+cast entry. All 7,827 cached cast positions are integers, so this broader input
+handling changes no current lead actor or analytical output.
+
+The film-level franchise median counts each usable film once. The equal-weight
+collection figure is the median of each collection's usable-film median, so each
+collection contributes once. The latter includes collections with at least one
+usable film; bundle shortlists require at least three usable films in the chosen
+release window to limit rankings based on sparse evidence.

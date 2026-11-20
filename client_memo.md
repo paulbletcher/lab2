@@ -8,9 +8,10 @@
 
 Franchise films had the stronger middle result in reported ticket sales per
 $1 of production budget: **$5.62 versus $3.84** across all years (96 versus 16
-films), and **$5.05 versus $3.84** from 2000 onward (63 versus 8). Giving each
-franchise one result also preserves the lead. These figures describe past
-box-office performance, not streaming returns.
+films), and **$5.05 versus $3.84** from 2000 onward (63 versus 8). These are
+film-level medians: each film counts once. The median of collection medians,
+where each collection counts once, is **$5.73** and **$4.39**, respectively,
+also above standalones' $3.84. These describe past box office, not streaming returns.
 
 ## What I built
 
@@ -27,8 +28,11 @@ box-office performance, not streaming returns.
 result is $11.73 per budget dollar across three films; it ranks second across
 all years and first from 2000 onward. **Star Wars** leads across all years at
 $13.40 across six films. **Indiana Jones** follows at $10.89 across four.
-For releases from 2000 onward, The Lord of the Rings, **Ice Age** ($8.26), and
-**The Avengers** ($6.87) lead.
+From 2000 onward, The Lord of the Rings, **Ice Age** ($8.26), and
+**The Avengers** ($6.87) lead. Bundle rankings require at least **three films
+with usable ratios in that period**: one- and two-film collections are excluded
+to avoid choosing a bundle on sparse evidence. The recommendation applies to
+these eligible collections, rather than every possible bundle.
 
 Keep five individual targets: **The Good, the Bad and the Ugly** and
 **Pulp Fiction** for the highest ticket sales per budget dollar; **Schindler's

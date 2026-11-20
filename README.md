@@ -11,7 +11,7 @@ relative to budget. The analysis also summarizes first-billed actors and directo
 - [Five architecture decision records](decisions/): ADR-001 through ADR-005 in the shared format.
 - [Improvement beyond the brief](improvement.md): quarterly shortlist report and passing synthetic test.
 - [Measurement report](measurement_report.md): hardware, method, timings, and the 500-record capacity check.
-- [Profiling notebook](data%20profile/tmdb_data_profile.ipynb): executed checks and supporting analysis.
+- [Profiling notebook](data_profile/tmdb_data_profile.ipynb): executed checks and supporting analysis.
 
 The original [Word memo](docs/streamvault_licensing_memo.docx) and
 [detailed diagnosis](docs/data_diagnosis.md) are retained as supporting documents.
@@ -20,7 +20,7 @@ The root-level Markdown files use the shared submission templates.
 ## Setup
 
 Run these commands in PowerShell from the repository root. The pipeline has been
-tested with Python 3.14. Each clone should use its own virtual environment.
+tested with Python 3.14.3 (pinned in `.python-version`). Each clone should use its own virtual environment.
 
 ```powershell
 python -m venv .venv
@@ -42,10 +42,21 @@ The direct dependencies are pinned in `requirements.txt`:
 - `requests==2.34.2`
 - `python-dotenv==1.2.4`
 
+All three pins installed successfully from the official PyPI index in a clean
+Python 3.14.3 virtual environment on 20 November 2026 UTC; `pip check` found no
+broken requirements. The versions were retained after verification.
+
 ## Run the pipeline
 
-Run each stage in order from the repository root, checking its result before
-continuing:
+The canonical complete workflow is the runner, from the repository root:
+
+```powershell
+.\.venv\Scripts\python.exe run_pipeline.py
+```
+
+It runs Validate, Extract, then Analyze and stops if a stage fails. To debug or
+resume a prepared stage, these individual commands call the same entry points,
+in the same prerequisite order:
 
 ```powershell
 .\.venv\Scripts\python.exe pipeline/validate.py
@@ -80,21 +91,19 @@ continuing:
    responses, transforms them, computes the analysis, checks integrity, and
    calls the loader to write nine CSV tables under `data/analysis/`.
 
-To run the full workflow with the current Python environment:
-
-```powershell
-python run_pipeline.py
-```
-
-The runner uses the existing validation and extraction scripts, reuses successful
-SQLite responses, and retries failed requests. Input ID validation is a prerequisite
-for acquisition in this project. The lecture's extract → validate → transform →
-check → load responsibilities live in these modules:
+`run_pipeline.py` defines the sequence once in `STAGES`, using the importable
+stage modules. Each child process calls that module's `main()` with a timeout:
+60 seconds for validation, 3,600 for acquisition, and 120 for analysis. It logs
+stage starts/completions, reports the failing or timed-out stage, and stops before
+later stages. Captured error output redacts the configured API key and `api_key`
+query values. Saved acquisition responses survive a failure and are reused.
+Validation must create the unique ID list before acquisition; analysis requires
+the cache and fetch audit. The stages have these responsibilities:
 
 | Stage     | Location and responsibility                                                                                                                                                                        |
 | --------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Extract   | `pipeline/extract.py`: TMDb acquisition, response ID validation, SQLite cache, and fetch audit                                                                                                     |
 | Validate  | `pipeline/validate.py`: normalize and validate input IDs, remove duplicates, reconcile input counts, and write input audits                                                                        |
+| Extract   | `pipeline/extract.py`: TMDb acquisition, response ID validation, SQLite cache, and fetch audit                                                                                                     |
 | Transform | `pipeline/transform.py`: flatten details, lead actors, and directors; calculate usable ratios                                                                                                      |
 | Analysis  | `pipeline/analysis.py`: comparisons, summaries, and rankings                                                                                                                                       |
 | Check     | `pipeline/checks.py`: unique movie IDs, detail row counts, one-to-one actor and many-to-one director joins, unique movie-director pairs, audit/cache coverage, and comparison count reconciliation |
@@ -163,13 +172,26 @@ the analysis CSVs and SQLite cache unchanged.
 | `directors_min_2_films.csv`   | Directors with at least two usable film ratios                                  |
 | `directors_min_3_films.csv`   | Directors with at least three usable film ratios                                |
 
+CSV tables are written to a temporary file beside their destination and replaced
+only after that table finishes writing; failed writes remove the temporary file
+and preserve the previous destination. This protects each file individually,
+not the nine-file set as one transaction.
+
 Revenue-to-budget ratios are calculated only when both values are positive.
+The comparison's `franchise_film_median` counts each usable film once. Its
+`franchise_equal_weight_median` first calculates each collection's median, then
+takes the median of those collection medians, giving each collection one value.
+The comparison includes every collection with a usable ratio; the bundle
+shortlist separately requires at least three usable films per release window.
+This avoids ranking a bundle on just one or two observed films and limits the
+recommendation to collections meeting that coverage rule.
+
 Franchise membership follows TMDb collection membership. These ratios describe
 reported revenue relative to production budget; they do not measure net profit.
 
 ## Supporting genre analysis
 
-The [TMDb data profiling notebook](data%20profile/tmdb_data_profile.ipynb)
+The [TMDb data profiling notebook](data_profile/tmdb_data_profile.ipynb)
 compares genres across all years, before 2000, and from 2000 onward.
 It reports median box-office revenue and median revenue per dollar of
 production budget. A genre needs at least five films with positive
@@ -220,8 +242,8 @@ The laptop had an Intel Core i5-6300U and 7.87 GiB RAM, running Windows 10 Pro.
 
 | Dataset | Films analyzed | Run 1 | Run 2 | Run 3 | Median |
 |---|---:|---:|---:|---:|---:|
-| Current TMDb cache | 112 of 117 validated IDs | 2.661 s | 2.403 s | 2.232 s | 2.403 s |
-| Synthetic cache | 500 of 500 IDs | 3.220 s | 3.075 s | 3.679 s | 3.220 s |
+| Current TMDb cache | 112 of 117 validated IDs | 2.381 s | 2.558 s | 2.124 s | 2.381 s |
+| Synthetic cache | 500 of 500 IDs | 3.598 s | 3.646 s | 3.154 s | 3.598 s |
 
 With the virtual environment activated (or replace `python` with
 `.\.venv\Scripts\python.exe`):
@@ -240,7 +262,11 @@ The 500-film dataset repeats complete cached details and credits whose fetch
 audit marks both endpoints successful, assigning each copy a unique test ID.
 Its dataset and outputs remain in a temporary folder that is removed afterward.
 It tests capacity for 500 records, rather than 500 independently fetched films.
-See the [measurement report](measurement_report.md) for p95, worst-case observed
+Successful source IDs are deduplicated and sorted numerically before cycling;
+JSON object keys are serialized in sorted order. Identical source records produce
+the same 500 IDs and outputs even if audit rows or SQLite insertion order change.
+No randomness is used, so no seed is needed; changed source content can still
+change the synthetic data. See the [measurement report](measurement_report.md) for p95, worst-case observed
 times, reproduction details, and limitations. No numeric runtime deadline was
 specified in the brief.
 
@@ -255,7 +281,7 @@ git pull --ff-only origin
 .\.venv\Scripts\python.exe -m pip check
 ```
 
-Then run the three pipeline commands above. Retain the clone's own `.env` and
+Then run the canonical `run_pipeline.py` command above. Retain the clone's own `.env` and
 original input. An existing cache tests cache reuse; a clone without a cache
 tests fresh acquisition. Confirm 117 unique validated IDs, inspect the acquisition
 audit and SQLite cache, and check that `data/analysis/` contains nine CSVs.

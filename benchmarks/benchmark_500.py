@@ -1,3 +1,5 @@
+"""Measure 500 deterministic copies of complete cached film records."""
+
 import csv
 import json
 import shutil
@@ -9,28 +11,27 @@ from itertools import cycle, islice
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
-root = Path(__file__).resolve().parents[1]
 
-# Read only movies with both endpoints marked successful in your current audit.
-with (root / "data/cache/fetch_audit.csv").open(newline="", encoding="utf-8-sig") as file:
-    source_ids = [
-        row["tmdb_id"] for row in csv.DictReader(file)
-        if row["details"] == row["credits"] == "ok"
-    ]
+def prepare_benchmark(root, test_root):
+    """Build identical data for identical responses, regardless of source row order."""
+    # Read only movies with both endpoints marked successful in your current audit.
+    with (root / "data/cache/fetch_audit.csv").open(newline="", encoding="utf-8-sig") as file:
+        source_ids = sorted({
+            row["tmdb_id"] for row in csv.DictReader(file)
+            if row["details"] == row["credits"] == "ok"
+        }, key=int)
 
-with closing(sqlite3.connect(root / "data/cache/tmdb.sqlite")) as db:
-    cached = {
-        (movie_id, endpoint): payload
-        for movie_id, endpoint, payload in db.execute(
-            "SELECT movie_id, endpoint, payload FROM responses"
-        )
-    }
+    with closing(sqlite3.connect(root / "data/cache/tmdb.sqlite")) as db:
+        cached = {
+            (movie_id, endpoint): payload
+            for movie_id, endpoint, payload in db.execute(
+                "SELECT movie_id, endpoint, payload FROM responses"
+            )
+        }
 
-if not source_ids:
-    raise SystemExit("The fetch audit has no movies with both responses.")
+    if not source_ids:
+        raise SystemExit("The fetch audit has no movies with both responses.")
 
-with TemporaryDirectory(prefix="lab2-benchmark-") as folder:
-    test_root = Path(folder)
     shutil.copytree(
         root / "pipeline", test_root / "pipeline",
         ignore=shutil.ignore_patterns("__pycache__"),
@@ -57,7 +58,7 @@ with TemporaryDirectory(prefix="lab2-benchmark-") as folder:
         for endpoint in ("details", "credits"):
             payload = json.loads(cached[(source_id, endpoint)])
             payload["id"] = int(movie_id)
-            responses.append((movie_id, endpoint, json.dumps(payload)))
+            responses.append((movie_id, endpoint, json.dumps(payload, sort_keys=True)))
 
     with closing(sqlite3.connect(cache_dir / "tmdb.sqlite")) as db:
         db.execute("""
@@ -81,8 +82,17 @@ with TemporaryDirectory(prefix="lab2-benchmark-") as folder:
         writer.writerow(["tmdb_id", "details", "credits"])
         writer.writerows((movie_id, "ok", "ok") for movie_id in ids)
 
-    subprocess.run(
-        [sys.executable, str(benchmarks_dir / "benchmark_analysis.py")],
-        cwd=test_root,
-        check=True,
-    )
+
+def main():
+    root = Path(__file__).resolve().parents[1]
+    with TemporaryDirectory(prefix="lab2-benchmark-") as folder:
+        test_root = Path(folder)
+        prepare_benchmark(root, test_root)
+        subprocess.run(
+            [sys.executable, str(test_root / "benchmarks/benchmark_analysis.py")],
+            cwd=test_root, check=True,
+        )
+
+
+if __name__ == "__main__":
+    main()

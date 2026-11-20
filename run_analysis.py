@@ -56,6 +56,11 @@ def main():
         raise SystemExit("The cache has no movie details for the validated IDs.")
 
     movies = flatten_movie_details(pd.DataFrame(detail_records))
+    for field, counts in movies.attrs["financial_coercion"].items():
+        print(
+            f"Financial quality: {field}: {counts['originally_missing']} originally missing; "
+            f"{counts['invalid_non_null']} non-null values became missing during coercion."
+        )
     check_movies(validated, detail_records, movies)
 
     movie_ids = set(movies["tmdb_id"])
