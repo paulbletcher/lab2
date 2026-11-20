@@ -64,14 +64,14 @@ SQLite responses, and retries failed requests. Input ID validation is a prerequi
 for acquisition in this project. The lecture's extract → validate → transform →
 check → load responsibilities live in these modules:
 
-| Stage | Location and responsibility |
-| --- | --- |
-| Extract | `pipeline/extract.py`: TMDb acquisition, response ID validation, SQLite cache, and fetch audit |
-| Validate | `pipeline/validate.py`: normalize and validate input IDs, remove duplicates, reconcile input counts, and write input audits |
-| Transform | `pipeline/transform.py`: flatten details, lead actors, and directors; calculate usable ratios |
-| Analysis | `pipeline/analysis.py`: comparisons, summaries, and rankings |
-| Check | `pipeline/checks.py`: unique movie IDs, detail row counts, one-to-one actor and many-to-one director joins, unique movie-director pairs, audit/cache coverage, and comparison count reconciliation |
-| Load | `pipeline/load.py`: write final analysis CSVs after checks pass |
+| Stage     | Location and responsibility                                                                                                                                                                        |
+| --------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Extract   | `pipeline/extract.py`: TMDb acquisition, response ID validation, SQLite cache, and fetch audit                                                                                                     |
+| Validate  | `pipeline/validate.py`: normalize and validate input IDs, remove duplicates, reconcile input counts, and write input audits                                                                        |
+| Transform | `pipeline/transform.py`: flatten details, lead actors, and directors; calculate usable ratios                                                                                                      |
+| Analysis  | `pipeline/analysis.py`: comparisons, summaries, and rankings                                                                                                                                       |
+| Check     | `pipeline/checks.py`: unique movie IDs, detail row counts, one-to-one actor and many-to-one director joins, unique movie-director pairs, audit/cache coverage, and comparison count reconciliation |
+| Load      | `pipeline/load.py`: write final analysis CSVs after checks pass                                                                                                                                    |
 
 `run_analysis.py` orchestrates transformation, analysis, checks, and loading without
 making API requests. It requires the fetch audit alongside the cache. Acquisition
@@ -124,21 +124,37 @@ the analysis CSVs and SQLite cache unchanged.
 
 ## Analysis outputs
 
-| CSV | Contents |
-| --- | --- |
-| `comparison.csv` | Franchise and standalone comparison for all years and releases from 2000 onward |
-| `franchises_all_years.csv` | Top three collections with at least three usable film ratios |
-| `franchises_2000_onward.csv` | Same shortlist for releases from 2000 onward |
-| `standalones_all_years.csv` | Top five standalone films with usable ratios |
-| `standalones_2000_onward.csv` | Same shortlist for releases from 2000 onward |
-| `actors_min_2_films.csv` | First-billed actors with at least two usable film ratios |
-| `actors_min_3_films.csv` | First-billed actors with at least three usable film ratios |
-| `directors_min_2_films.csv` | Directors with at least two usable film ratios |
-| `directors_min_3_films.csv` | Directors with at least three usable film ratios |
+| CSV                           | Contents                                                                        |
+| ----------------------------- | ------------------------------------------------------------------------------- |
+| `comparison.csv`              | Franchise and standalone comparison for all years and releases from 2000 onward |
+| `franchises_all_years.csv`    | Top three collections with at least three usable film ratios                    |
+| `franchises_2000_onward.csv`  | Same shortlist for releases from 2000 onward                                    |
+| `standalones_all_years.csv`   | Top five standalone films with usable ratios                                    |
+| `standalones_2000_onward.csv` | Same shortlist for releases from 2000 onward                                    |
+| `actors_min_2_films.csv`      | First-billed actors with at least two usable film ratios                        |
+| `actors_min_3_films.csv`      | First-billed actors with at least three usable film ratios                      |
+| `directors_min_2_films.csv`   | Directors with at least two usable film ratios                                  |
+| `directors_min_3_films.csv`   | Directors with at least three usable film ratios                                |
 
 Revenue-to-budget ratios are calculated only when both values are positive.
 Franchise membership follows TMDb collection membership. These ratios describe
 reported revenue relative to production budget; they do not measure net profit.
+
+## Supporting genre analysis
+
+The [TMDb data profiling notebook](data%20profile/tmdb_data_profile.ipynb)
+compares genres across all years, before 2000, and from 2000 onward.
+It reports median box-office revenue and median revenue per dollar of
+production budget. A genre needs at least five films with positive
+reported revenue in a period to receive a revenue rank.
+
+Fantasy led on median revenue overall and from 2000 onward. Adventure
+led before 2000. Genre groups can overlap. In this sample, Animation
+and Family contained the same 17 films.
+
+Run the notebook's `Genre analysis` section after preparing the cache
+and validated IDs. The nine CSVs in `data/analysis/` come from the
+main licensing analysis.
 
 ## Verified baseline
 
@@ -151,6 +167,28 @@ The remaining IDs returned HTTP 404 for both details and credits:
 Live API results can change; use `data/cache/fetch_audit.csv` to explain any
 difference from the 112-film baseline. Cached successful responses retain the
 data acquired on their original fetch date.
+
+## Performance test
+
+I ran the cached analysis three times per dataset on my laptop.
+
+| Dataset            |           Films analyzed |   Run 1 |   Run 2 |   Run 3 |  Median |
+| ------------------ | -----------------------: | ------: | ------: | ------: | ------: |
+| Current TMDb cache | 112 of 117 validated IDs | 2.291 s | 1.688 s | 2.643 s | 2.291 s |
+| Synthetic cache    |           500 of 500 IDs | 3.196 s | 2.316 s | 2.181 s | 2.316 s |
+
+python benchmarks/benchmark_analysis.py
+python benchmarks/benchmark_500.py
+
+The timings include Python startup, reading the SQLite cache, transforming
+the data, calculating the results, running integrity checks, and writing
+the CSVs. They exclude live TMDb requests and synthetic data setup.
+
+The 500-film test produced all nine analysis tables in each run. Its
+median was about 2.3 seconds, similar to the current dataset on this
+laptop. This demonstrates that the cached analysis can process 500
+film records. A first run that fetches data from TMDb will also depend
+on network and API response times.
 
 ## Repeat the local clone test
 
