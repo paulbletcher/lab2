@@ -4,6 +4,19 @@ Validate movie IDs, acquire movie details and credits from TMDb, cache the raw
 responses in SQLite, and compare franchise and standalone films using revenue
 relative to budget. The analysis also summarizes first-billed actors and directors.
 
+## Submission deliverables
+
+- [Client memo](client_memo.md): recommendation, shortlists, both release windows, talent, deal note, and limits.
+- [Data findings](data_findings.md): reconciliation, ranked risks, measured scenarios, and unresolved evidence.
+- [Five architecture decision records](decisions/): ADR-001 through ADR-005 in the shared format.
+- [Improvement beyond the brief](improvement.md): quarterly shortlist report and passing synthetic test.
+- [Measurement report](measurement_report.md): hardware, method, timings, and the 500-record capacity check.
+- [Profiling notebook](data%20profile/tmdb_data_profile.ipynb): executed checks and supporting analysis.
+
+The original [Word memo](docs/streamvault_licensing_memo.docx) and
+[detailed diagnosis](docs/data_diagnosis.md) are retained as supporting documents.
+The root-level Markdown files use the shared submission templates.
+
 ## Setup
 
 Run these commands in PowerShell from the repository root. The pipeline has been
@@ -180,13 +193,14 @@ data acquired on their original fetch date.
 
 ## Performance test
 
-I ran the cached analysis three times per dataset on 20 November 2026,
-from the repository root using the project's virtual environment.
+The latest verification ran three cached analyses per dataset on 20 November
+2026 using the project's virtual environment and a temporary project copy.
+The laptop had an Intel Core i5-6300U and 7.87 GiB RAM, running Windows 10 Pro.
 
-| Dataset            |           Films analyzed |   Run 1 |   Run 2 |   Run 3 |  Median |
-| ------------------ | -----------------------: | ------: | ------: | ------: | ------: |
-| Current TMDb cache | 112 of 117 validated IDs | 3.579 s | 1.619 s | 1.868 s | 1.868 s |
-| Synthetic cache    |           500 of 500 IDs | 2.524 s | 2.614 s | 2.612 s | 2.612 s |
+| Dataset | Films analyzed | Run 1 | Run 2 | Run 3 | Median |
+|---|---:|---:|---:|---:|---:|
+| Current TMDb cache | 112 of 117 validated IDs | 2.661 s | 2.403 s | 2.232 s | 2.403 s |
+| Synthetic cache | 500 of 500 IDs | 3.220 s | 3.075 s | 3.679 s | 3.220 s |
 
 With the virtual environment activated (or replace `python` with
 `.\.venv\Scripts\python.exe`):
@@ -196,18 +210,18 @@ python benchmarks/benchmark_analysis.py
 python benchmarks/benchmark_500.py
 ```
 
-The timings include Python startup, reading the SQLite cache, transforming
-the data, calculating the results, running integrity checks, and writing
-the CSVs. They exclude live TMDb requests and synthetic data setup.
+Each run wrote nine CSVs. The timings include Python startup, reading the SQLite
+cache, transformation, calculations, integrity checks, and CSV writes. They
+exclude live TMDb requests and synthetic dataset setup. Every analysis process
+was fresh; operating-system caches were not flushed or controlled.
 
-Both benchmarks wrote nine CSVs in each of their three runs. The 500-film
-dataset repeats complete cached film records (details and credits) whose
-fetch audit marks both endpoints successful, assigning each copy a unique
-test ID. Its dataset and outputs stay inside a temporary project folder,
-which is removed when the benchmark finishes. Its median was 2.612 seconds.
-This demonstrates that the cached analysis can process 500 film records.
-A first run that fetches data from TMDb will also depend on network and
-API response times.
+The 500-film dataset repeats complete cached details and credits whose fetch
+audit marks both endpoints successful, assigning each copy a unique test ID.
+Its dataset and outputs remain in a temporary folder that is removed afterward.
+It tests capacity for 500 records, rather than 500 independently fetched films.
+See the [measurement report](measurement_report.md) for p95, worst-case observed
+times, reproduction details, and limitations. No numeric runtime deadline was
+specified in the brief.
 
 ## Repeat the local clone test
 
@@ -226,4 +240,4 @@ tests fresh acquisition. Confirm 117 unique validated IDs, inspect the acquisiti
 audit and SQLite cache, and check that `data/analysis/` contains nine CSVs.
 
 See [the data diagnosis](docs/data_diagnosis.md) and
-[architecture decisions](docs/adrs/) for more background.
+[architecture decisions](decisions/) for more background.

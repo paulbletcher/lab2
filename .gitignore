@@ -10,3 +10,8 @@
 /outputs/
 /cache/
 /id_list.csv
+
+# Python-generated files
+__pycache__/
+*.py[cod]
+.ipynb_checkpoints/

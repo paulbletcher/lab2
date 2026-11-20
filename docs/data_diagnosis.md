@@ -1,6 +1,11 @@
+# Supporting data diagnosis
+
+The submission-format account is [Data findings](../data_findings.md).
+This document retains the detailed local evidence and sensitivity results.
+
 ## Acquisition coverage
 
-**Finding.** TMDb returned HTTP 404 for both the movie details and creditsrequests for five of the 117 validated IDs. I excluded those five IDs, leaving 112 films in the analysis (95.7% of validated IDs).
+**Finding.** TMDb returned HTTP 404 for both the movie details and credits requests for five of the 117 validated IDs. I excluded those five IDs, leaving 112 films in the analysis (95.7% of validated IDs).
 
 | TMDb ID   | Movie details and credits outcome |
 | --------- | --------------------------------- |
