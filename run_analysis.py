@@ -25,6 +25,13 @@ def main():
     if not ids_path.is_file() or not cache_path.is_file():
         raise SystemExit("Generate validated_ids.csv and the TMDb cache first.")
 
+    audit_path = cache_path.parent / "fetch_audit.csv"
+    if not audit_path.is_file():
+        raise SystemExit(
+            "Missing data/cache/fetch_audit.csv. "
+            "Run python pipeline/extract.py to rebuild it, then rerun this script."
+        )
+
     validated = pd.read_csv(ids_path, dtype={"tmdb_id": str})
     valid_ids = set(validated["tmdb_id"])
 
@@ -79,7 +86,7 @@ def main():
             ]
 
     output_dir = root / "data" / "analysis"
-    audit = pd.read_csv(cache_path.parent / "fetch_audit.csv", dtype={"tmdb_id": str})
+    audit = pd.read_csv(audit_path, dtype={"tmdb_id": str})
     failures = check_acquisition(validated, rows, audit)
     for failure in failures:
         print(f"Acquisition audit: {failure}")
