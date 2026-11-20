@@ -70,8 +70,12 @@ continuing:
    continues. Inspect the audit even when the script exits successfully.
    Successful responses are committed to SQLite as they arrive, so a rerun
    reuses them even if a later request stopped the batch. Failed responses are
-   not cached and are requested again on a later run. Importing
-   `pipeline.extract` does not start acquisition.
+   not cached and are requested again on a later run. The fetch audit is replaced
+   atomically after each endpoint, including a fatal stop. It contains every
+   validated ID: saved responses remain `ok`, the stopping endpoint records its
+   failure, and uncached requests not reached are marked `not attempted`.
+   Importing `pipeline.extract` or `pipeline.validate` performs no acquisition
+   or validation; their commands start execution through `main()`.
 3. **Analyze:** `python run_analysis.py` reads the validated IDs and cached
    responses, transforms them, computes the analysis, checks integrity, and
    calls the loader to write nine CSV tables under `data/analysis/`.
@@ -175,9 +179,26 @@ Fantasy led on median revenue overall and from 2000 onward. Adventure
 led before 2000. Genre groups can overlap. In this sample, Animation
 and Family contained the same 17 films.
 
-Run the notebook's `Genre analysis` section after preparing the cache
-and validated IDs. The nine CSVs in `data/analysis/` come from the
-main licensing analysis.
+Run the notebook after preparing the cache and validated IDs. Its optional live
+spot-checks are disabled by default, so a top-to-bottom run uses local data
+without TMDb calls. To intentionally perform live spot-checks, set
+`RUN_LIVE_SPOT_CHECKS = True` in that section and configure your local API key.
+The nine CSVs in `data/analysis/` come from the main licensing analysis.
+
+## Offline verification
+
+After installing the pinned dependencies, run from the repository root:
+
+```powershell
+.\.venv\Scripts\python.exe -B -m unittest discover -s tests -v
+```
+
+The [regression checks](tests/README.md) use mocked HTTP responses and waits,
+temporary inputs and databases, and versioned synthetic shortlist fixtures.
+They need no API key, local candidate list, or cache. They cover import safety,
+ID normalization, retries and fatal-stop audit persistence, transform edge cases,
+disabled notebook live checks, and all four shortlist changes plus unchanged
+sections. They do not write the real cache or analysis outputs.
 
 ## Verified baseline
 

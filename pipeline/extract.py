@@ -5,6 +5,7 @@ from contextlib import closing
 from datetime import datetime, timezone
 from email.utils import parsedate_to_datetime
 from pathlib import Path
+from tempfile import NamedTemporaryFile
 from time import sleep
 
 import pandas as pd
@@ -94,6 +95,24 @@ def get_response(connection, movie_id, endpoint, url, session, api_key):
     return payload
 
 
+def write_audit(results, audit_path):
+    """Replace the audit atomically, preserving the existing CSV layout."""
+    audit = pd.DataFrame(results, columns=["tmdb_id", "details", "credits"])
+    temporary_path = None
+    try:
+        with NamedTemporaryFile(
+            mode="w", encoding="utf-8", newline="", dir=audit_path.parent,
+            prefix=".fetch-audit-", suffix=".tmp", delete=False,
+        ) as temporary_file:
+            temporary_path = Path(temporary_file.name)
+            audit.to_csv(temporary_file, index=False)
+        temporary_path.replace(audit_path)
+    finally:
+        if temporary_path is not None:
+            temporary_path.unlink(missing_ok=True)
+    return audit
+
+
 def main():
     project_root = Path(__file__).resolve().parents[1]
     load_dotenv(project_root / ".env")
@@ -105,7 +124,7 @@ def main():
     validated_ids = pd.read_csv(ids_path, dtype={"tmdb_id": str})
     cache_path = project_root / "data" / "cache" / "tmdb.sqlite"
     cache_path.parent.mkdir(parents=True, exist_ok=True)
-    results = []
+    audit_path = cache_path.parent / "fetch_audit.csv"
 
     with closing(sqlite3.connect(cache_path)) as connection, requests.Session() as session:
         connection.execute("""
@@ -118,23 +137,35 @@ def main():
             )
         """)
 
-        for movie_id in validated_ids["tmdb_id"]:
+        cached = set(connection.execute("SELECT movie_id, endpoint FROM responses"))
+        results = [
+            {
+                "tmdb_id": movie_id,
+                "details": "ok" if (movie_id, "details") in cached else "not attempted",
+                "credits": "ok" if (movie_id, "credits") in cached else "not attempted",
+            }
+            for movie_id in validated_ids["tmdb_id"]
+        ]
+        write_audit(results, audit_path)
+
+        for result in results:
+            movie_id = result["tmdb_id"]
             url = f"https://api.themoviedb.org/3/movie/{movie_id}"
-            result = {"tmdb_id": movie_id}
 
             for endpoint, endpoint_url in (("details", url), ("credits", f"{url}/credits")):
                 try:
                     get_response(connection, movie_id, endpoint, endpoint_url, session, api_key)
                     result[endpoint] = "ok"
+                except SystemExit as exc:
+                    result[endpoint] = str(exc)
+                    raise
                 except (RuntimeError, ValueError) as exc:
                     result[endpoint] = str(exc)
                     print(exc)
-
-            results.append(result)
+                finally:
+                    write_audit(results, audit_path)
 
     audit = pd.DataFrame(results, columns=["tmdb_id", "details", "credits"])
-    audit_path = cache_path.parent / "fetch_audit.csv"
-    audit.to_csv(audit_path, index=False)
 
     complete = audit[["details", "credits"]].eq("ok").all(axis=1)
     print(f"Movies with both responses: {complete.sum()}/{len(audit)}")

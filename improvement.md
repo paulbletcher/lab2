@@ -34,6 +34,17 @@ The `snapshot` and `compare` commands reported all four expected changes
 in the all-years standalone shortlist. The other three shortlist
 sections correctly reported no changes.
 
+The repeatable test and both synthetic fixture snapshots are included under
+[`tests/`](tests/README.md). Run from the repository root:
+
+```powershell
+.\.venv\Scripts\python.exe -B -m unittest discover -s tests -v
+```
+
+The shortlist test invokes the public `snapshot` and `compare` commands, checks
+the exact ranks and displayed ratios in the correct release windows, and uses
+only temporary output folders. It needs no API key or local acquisition data.
+
 ## What it is worth to Kwame and Adjoa
 
 Adjoa can save one snapshot per quarter and generate the comparison with one
