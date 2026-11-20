@@ -9,7 +9,7 @@ from itertools import cycle, islice
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
-root = Path(__file__).resolve().parent
+root = Path(__file__).resolve().parents[1]
 
 # Read only movies with both endpoints marked successful in your current audit.
 with (root / "data/cache/fetch_audit.csv").open(newline="", encoding="utf-8-sig") as file:
@@ -35,8 +35,13 @@ with TemporaryDirectory(prefix="lab2-benchmark-") as folder:
         root / "pipeline", test_root / "pipeline",
         ignore=shutil.ignore_patterns("__pycache__"),
     )
-    for name in ("run_analysis.py", "benchmark_analysis.py"):
-        shutil.copy2(root / name, test_root / name)
+    shutil.copy2(root / "run_analysis.py", test_root / "run_analysis.py")
+    benchmarks_dir = test_root / "benchmarks"
+    benchmarks_dir.mkdir()
+    shutil.copy2(
+        root / "benchmarks/benchmark_analysis.py",
+        benchmarks_dir / "benchmark_analysis.py",
+    )
 
     cache_dir = test_root / "data/cache"
     ids_dir = test_root / "data/validated"
@@ -77,7 +82,7 @@ with TemporaryDirectory(prefix="lab2-benchmark-") as folder:
         writer.writerows((movie_id, "ok", "ok") for movie_id in ids)
 
     subprocess.run(
-        [sys.executable, str(test_root / "benchmark_analysis.py")],
+        [sys.executable, str(benchmarks_dir / "benchmark_analysis.py")],
         cwd=test_root,
         check=True,
     )

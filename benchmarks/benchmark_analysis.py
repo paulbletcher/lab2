@@ -4,7 +4,7 @@ from pathlib import Path
 from statistics import median
 from time import perf_counter
 
-project_root = Path(__file__).resolve().parent
+project_root = Path(__file__).resolve().parents[1]
 analysis_script = project_root / "run_analysis.py"
 timings = []
 

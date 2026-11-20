@@ -18,14 +18,32 @@ Divide reported box-office revenue by reported production budget when both amoun
 
 - **How it would work:** Sum the usable film ratios in each group and divide by the number of films.
 - **Why it is attractive:** It gives breakout films more influence, which could be useful if Kwame’s priority is exceptional upside.
-- **Why rejected:** The main question is what a typical film in each group achieved. The median is less sensitive to a few very high ratios. I considered the mean as an alternative, while the numerical sensitivity check tested two ways of weighting franchises.
+- **Why rejected:** The median better represents typical film performance because unusually high ratios, such as 70.49× for Star Wars and 67.24× for Jaws, have less influence on it.
+
+#### Mean and median comparison
+
+Both statistics use the same eligible films, with each film counted once.
+The gap is the franchise result minus the standalone result.
+
+| Release window | Franchise mean | Standalone mean | Mean gap | Franchise median | Standalone median | Median gap |
+| -------------- | -------------: | --------------: | -------: | ---------------: | ----------------: | ---------: |
+| All years      |         8.540× |          8.284× |  +0.256× |           5.624× |            3.845× |    +1.779× |
+| 2000 onward    |         5.411× |          4.901× |  +0.510× |           5.052× |            3.845× |    +1.207× |
+
+Franchises led in both release windows using either statistic. Using the
+mean narrowed the franchise lead from 1.779× to 0.256× across all years
+and from 1.207× to 0.510× from 2000 onward.
 
 ## Consequences
 
 - **What this buys:** With each film counted once, franchises led across all years (5.62× versus 3.84×) and from 2000 onward (5.05× versus 3.84×). The lead also held when each franchise contributed one median, at 5.73× versus 3.84× across all years and 4.39× versus 3.84× from 2000 onward.
 - **What this costs:** The median summarizes the middle and can hide weaker bundle entries. The franchise shortlist therefore includes the lowest observed ratio alongside the median. The 2000-onward standalone median is based on eight films.
 - **What it costs the client if I am wrong:** Kwame could overlook a promising breakout title if he uses the median as his only screening measure. He could also overpay if he treats historical ticket sales as a forecast of streaming value.
-- **What would make me revisit this:** If Kwame prioritizes breakout potential, run the mean comparison beside the median. If the leading group changes, report both and explain which films account for the difference.
+- **What would make me revisit this:** If Kwame starts prioritizing
+  breakout potential, report the mean alongside the median and show
+  which titles account for the largest differences. Recalculate both
+  measures when the candidate list expands and check whether the
+  leading group changes.
 
 ## What this survives
 

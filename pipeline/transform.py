@@ -8,13 +8,13 @@ def flatten_movie_details(movies: pd.DataFrame) -> pd.DataFrame:
          "vote_average", "vote_count"]
     ].copy()
 
-    collections = movies["belongs_to_collection"]
-    flat["collection_id"] = collections.map(
-        lambda value: value.get("id") if isinstance(value, dict) else None
-    ).astype("Int64")
-    flat["collection_name"] = collections.map(
-        lambda value: value.get("name") if isinstance(value, dict) else None
-    )
+    collections = pd.json_normalize([
+        value if isinstance(value, dict) else {}
+        for value in movies["belongs_to_collection"]
+    ]).reindex(columns=["id", "name"])
+    collections.index = movies.index
+    flat["collection_id"] = collections["id"].astype("Int64")
+    flat["collection_name"] = collections["name"]
 
     flat["release_date"] = pd.to_datetime(
         flat["release_date"], format="%Y-%m-%d", errors="coerce"
@@ -33,41 +33,40 @@ def flatten_movie_details(movies: pd.DataFrame) -> pd.DataFrame:
 
 def flatten_lead_actors(credits_by_movie: dict) -> pd.DataFrame:
     """Return the first-billed actor for each movie with usable cast data."""
-    rows = []
+    columns = ["tmdb_id", "lead_actor_id", "lead_actor_name"]
+    movies = pd.DataFrame.from_dict(credits_by_movie, orient="index")
+    cast = movies.reindex(columns=["cast"])["cast"].explode()
+    # Check original values before normalization can coerce orders to floats.
+    cast = cast[cast.map(
+        lambda actor: isinstance(actor, dict)
+        and isinstance(actor.get("order"), int)
+    )]
+    if cast.empty:
+        return pd.DataFrame(columns=columns)
 
-    for movie_id, credits in credits_by_movie.items():
-        ranked_cast = [
-            actor
-            for actor in credits.get("cast", [])
-            if isinstance(actor.get("order"), int)
-        ]
-
-        if ranked_cast:
-            lead = min(ranked_cast, key=lambda actor: actor["order"])
-            rows.append({
-                "tmdb_id": movie_id,
-                "lead_actor_id": lead["id"],
-                "lead_actor_name": lead["name"],
-            })
-
-    return pd.DataFrame(
-        rows, columns=["tmdb_id", "lead_actor_id", "lead_actor_name"]
-    )
+    actors = pd.json_normalize(cast.tolist())
+    actors["tmdb_id"] = cast.index.to_numpy()
+    leads = actors.loc[actors.groupby("tmdb_id", sort=False)["order"].idxmin()]
+    return leads.rename(columns={
+        "id": "lead_actor_id", "name": "lead_actor_name",
+    })[columns].reset_index(drop=True)
 
 
 def flatten_directors(credits_by_movie: dict) -> pd.DataFrame:
     """Return one row per movie–director pair."""
-    rows = []
+    columns = ["tmdb_id", "director_id", "director_name"]
+    movies = pd.DataFrame.from_dict(credits_by_movie, orient="index")
+    crew = movies.reindex(columns=["crew"])["crew"].explode()
+    crew = crew[crew.map(
+        lambda person: isinstance(person, dict) and person.get("job") == "Director"
+    )]
+    if crew.empty:
+        return pd.DataFrame(columns=columns)
 
-    for movie_id, credits in credits_by_movie.items():
-        for person in credits.get("crew") or []:
-            if person.get("job") == "Director":
-                rows.append({
-                    "tmdb_id": movie_id,
-                    "director_id": person["id"],
-                    "director_name": person["name"],
-                })
-
-    return pd.DataFrame(
-        rows, columns=["tmdb_id", "director_id", "director_name"]
-    ).drop_duplicates(subset=["tmdb_id", "director_id"], ignore_index=True)
+    directors = pd.json_normalize(crew.tolist())
+    directors["tmdb_id"] = crew.index.to_numpy()
+    return directors.rename(columns={
+        "id": "director_id", "name": "director_name",
+    })[columns].drop_duplicates(
+        subset=["tmdb_id", "director_id"], ignore_index=True,
+    )

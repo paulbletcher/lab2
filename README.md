@@ -46,9 +46,19 @@ continuing:
 2. **Extract:** requests movie details and credits for each validated ID. Stores
    successful responses in `data/cache/tmdb.sqlite` and writes endpoint outcomes
    to `data/cache/fetch_audit.csv`. Successful cached responses are reused on
-   later runs; failed requests are retried. HTTP 401, 403, or 429 stops the batch.
-   Other request failures are recorded in the audit, so inspect it even when the
-   script exits successfully.
+   later runs without an HTTP request. One HTTP session is reused for the run.
+   Uncached GETs retry connection errors, timeouts, and HTTP 429, 500, 502, 503,
+   and 504 up to three times after the first attempt (four attempts total).
+   Retries honor a valid `Retry-After` header in seconds or as an HTTP date;
+   otherwise they wait 1, 2, then 4 seconds.
+   HTTP 401 or 403 stops the batch immediately; HTTP 429 stops it after the retry
+   limit. HTTP 404 and other endpoint failures, including exhausted connection,
+   timeout, or server-error retries, are recorded in the audit and acquisition
+   continues. Inspect the audit even when the script exits successfully.
+   Successful responses are committed to SQLite as they arrive, so a rerun
+   reuses them even if a later request stopped the batch. Failed responses are
+   not cached and are requested again on a later run. Importing
+   `pipeline.extract` does not start acquisition.
 3. **Analyze:** `python run_analysis.py` reads the validated IDs and cached
    responses, transforms them, computes the analysis, checks integrity, and
    calls the loader to write nine CSV tables under `data/analysis/`.
@@ -170,25 +180,34 @@ data acquired on their original fetch date.
 
 ## Performance test
 
-I ran the cached analysis three times per dataset on my laptop.
+I ran the cached analysis three times per dataset on 20 November 2026,
+from the repository root using the project's virtual environment.
 
 | Dataset            |           Films analyzed |   Run 1 |   Run 2 |   Run 3 |  Median |
 | ------------------ | -----------------------: | ------: | ------: | ------: | ------: |
-| Current TMDb cache | 112 of 117 validated IDs | 2.291 s | 1.688 s | 2.643 s | 2.291 s |
-| Synthetic cache    |           500 of 500 IDs | 3.196 s | 2.316 s | 2.181 s | 2.316 s |
+| Current TMDb cache | 112 of 117 validated IDs | 3.579 s | 1.619 s | 1.868 s | 1.868 s |
+| Synthetic cache    |           500 of 500 IDs | 2.524 s | 2.614 s | 2.612 s | 2.612 s |
 
+With the virtual environment activated (or replace `python` with
+`.\.venv\Scripts\python.exe`):
+
+```powershell
 python benchmarks/benchmark_analysis.py
 python benchmarks/benchmark_500.py
+```
 
 The timings include Python startup, reading the SQLite cache, transforming
 the data, calculating the results, running integrity checks, and writing
 the CSVs. They exclude live TMDb requests and synthetic data setup.
 
-The 500-film test produced all nine analysis tables in each run. Its
-median was about 2.3 seconds, similar to the current dataset on this
-laptop. This demonstrates that the cached analysis can process 500
-film records. A first run that fetches data from TMDb will also depend
-on network and API response times.
+Both benchmarks wrote nine CSVs in each of their three runs. The 500-film
+dataset repeats complete cached film records (details and credits) whose
+fetch audit marks both endpoints successful, assigning each copy a unique
+test ID. Its dataset and outputs stay inside a temporary project folder,
+which is removed when the benchmark finishes. Its median was 2.612 seconds.
+This demonstrates that the cached analysis can process 500 film records.
+A first run that fetches data from TMDb will also depend on network and
+API response times.
 
 ## Repeat the local clone test
 
